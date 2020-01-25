@@ -125,13 +125,13 @@ static ina260_status_t ina260_read_mask_enable(ina260_device_t *dev,
 // ------------------------------------------------------- exported functions --
 
 
-/***
+/**
   * @brief    initialize the INA260 with default configuration
   *
   * @param    i2c_hal - pointer to configured HAL I2C device handle
   *
-  * @retval   pointer to newly allocated ina260_device_t struct
- ***/
+  * @return   pointer to newly allocated ina260_device_t struct
+  */
 ina260_device_t *ina260_device_new(
     I2C_HandleTypeDef *i2c_hal,
     uint8_t i2c_slave_addr)
@@ -157,13 +157,13 @@ ina260_device_t *ina260_device_new(
   return dev;
 }
 
-/***
+/**
   * @brief    check if we are communicating with the expected device over I2C
   *           correctly
   *
   * @param    dev - pointer to initialized ina260_device_t struct
   *
-  * @retval   status of the I2C read comparison with predefined device ID, may
+  * @return   status of the I2C read comparison with predefined device ID, may
   *           be one of the following values:
   *             HAL_OK      - value read over I2C matches expected device ID
   *             HAL_ERROR   - I2C read error or doesn't match expected value
@@ -171,7 +171,7 @@ ina260_device_t *ina260_device_new(
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
   *
- ***/
+  */
 ina260_status_t ina260_device_ready(ina260_device_t *dev)
 {
   ina260_status_t status;
@@ -192,7 +192,7 @@ ina260_status_t ina260_device_ready(ina260_device_t *dev)
   return HAL_OK;
 }
 
-/***
+/**
   * @brief    block until we are communicating with the expected device over
   *           I2C correctly
   *
@@ -202,14 +202,14 @@ ina260_status_t ina260_device_ready(ina260_device_t *dev)
   *                     indefinitely, use value HAL_MAX_DELAY. a value of 0
   *                     will attempt communication only once.
   *
-  * @retval   status of the I2C read comparison with predefined device ID, may
+  * @return   status of the I2C read comparison with predefined device ID, may
   *           be one of the following values:
   *             HAL_OK      - value read over I2C matches expected device ID
   *             HAL_ERROR   - I2C read error or doesn't match expected value
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout or failed to obtain the
   *                           expected device ID within given timeout period.
- ***/
+  */
 ina260_status_t ina260_wait_until_device_ready(ina260_device_t *dev,
     uint32_t timeout)
 {
@@ -225,7 +225,7 @@ ina260_status_t ina260_wait_until_device_ready(ina260_device_t *dev,
   return HAL_OK;
 }
 
-/***
+/**
   * @brief    set all configuration parameters at once
   *
   * @param    dev - pointer to initialized ina260_device_t struct
@@ -281,14 +281,14 @@ ina260_status_t ina260_wait_until_device_ready(ina260_device_t *dev,
   *             @arg @ref  iamAverage512  - 512 samples
   *             @arg @ref  iamAverage1024 - 1024 samples
   *
-  * @retval   status of the I2C write operation with the new configuration, may
+  * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
   *             HAL_OK      - value successfully written to config register
   *             HAL_ERROR   - I2C write error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_set_config(
     ina260_device_t                  *dev,
     ina260_operating_type_t           operating_type,
@@ -309,7 +309,7 @@ ina260_status_t ina260_set_config(
   return ina260_write_config(dev);
 }
 
-/***
+/**
   * @brief    set the operating type
   *
   * @param    dev - pointer to initialized ina260_device_t struct
@@ -322,14 +322,14 @@ ina260_status_t ina260_set_config(
   *             @arg @ref  iotVoltage  - perform voltage readings only
   *             @arg @ref  iotPower    - perform current and voltage readings
   *
-  * @retval   status of the I2C write operation with the new configuration, may
+  * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
   *             HAL_OK      - value successfully written to config register
   *             HAL_ERROR   - I2C write error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_set_operating_type(
     ina260_device_t *dev, ina260_operating_type_t operating_type)
 {
@@ -341,7 +341,7 @@ ina260_status_t ina260_set_operating_type(
   return ina260_write_config(dev);
 }
 
-/***
+/**
   * @brief    set the operating mode
   *
   * @param    dev - pointer to initialized ina260_device_t struct
@@ -351,14 +351,14 @@ ina260_status_t ina260_set_operating_type(
   *             @arg @ref  iomTriggered  - perform one-shot reading
   *             @arg @ref  iomContinuous - continuously update readings
   *
-  * @retval   status of the I2C write operation with the new configuration, may
+  * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
   *             HAL_OK      - value successfully written to config register
   *             HAL_ERROR   - I2C write error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_set_operating_mode(
     ina260_device_t *dev, ina260_operating_mode_t operating_mode)
 {
@@ -370,7 +370,7 @@ ina260_status_t ina260_set_operating_mode(
   return ina260_write_config(dev);
 }
 
-/***
+/**
   * @brief    set the conversion time for both voltage and current readings
   *
   * @param    dev - pointer to initialized ina260_device_t struct
@@ -388,14 +388,14 @@ ina260_status_t ina260_set_operating_mode(
   *             @arg @ref  ictConvert4p156ms - 4.156 ms
   *             @arg @ref  ictConvert8p244ms - 8.244 ms
   *
-  * @retval   status of the I2C write operation with the new configuration, may
+  * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
   *             HAL_OK      - value successfully written to config register
   *             HAL_ERROR   - I2C write error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_set_conversion_time(
     ina260_device_t *dev, ina260_conversion_time_t ctime)
 {
@@ -408,7 +408,7 @@ ina260_status_t ina260_set_conversion_time(
   return ina260_write_config(dev);
 }
 
-/***
+/**
   * @brief    set the conversion time for current readings
   *
   * @param    dev - pointer to initialized ina260_device_t struct
@@ -426,14 +426,14 @@ ina260_status_t ina260_set_conversion_time(
   *             @arg @ref  ictConvert4p156ms - 4.156 ms
   *             @arg @ref  ictConvert8p244ms - 8.244 ms
   *
-  * @retval   status of the I2C write operation with the new configuration, may
+  * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
   *             HAL_OK      - value successfully written to config register
   *             HAL_ERROR   - I2C write error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_set_current_conversion_time(
     ina260_device_t *dev, ina260_current_conversion_time_t current_ctime)
 {
@@ -445,7 +445,7 @@ ina260_status_t ina260_set_current_conversion_time(
   return ina260_write_config(dev);
 }
 
-/***
+/**
   * @brief    set the conversion time for voltage readings
   *
   * @param    dev - pointer to initialized ina260_device_t struct
@@ -463,14 +463,14 @@ ina260_status_t ina260_set_current_conversion_time(
   *             @arg @ref  ictConvert4p156ms - 4.156 ms
   *             @arg @ref  ictConvert8p244ms - 8.244 ms
   *
-  * @retval   status of the I2C write operation with the new configuration, may
+  * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
   *             HAL_OK      - value successfully written to config register
   *             HAL_ERROR   - I2C write error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_set_voltage_conversion_time(
     ina260_device_t *dev, ina260_voltage_conversion_time_t voltage_ctime)
 {
@@ -482,7 +482,7 @@ ina260_status_t ina260_set_voltage_conversion_time(
   return ina260_write_config(dev);
 }
 
-/***
+/**
   * @brief    set the averaging mode for voltage and current readings
   *
   * @param    dev - pointer to initialized ina260_device_t struct
@@ -499,14 +499,14 @@ ina260_status_t ina260_set_voltage_conversion_time(
   *             @arg @ref  iamAverage512  - 512 samples
   *             @arg @ref  iamAverage1024 - 1024 samples
   *
-  * @retval   status of the I2C write operation with the new configuration, may
+  * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
   *             HAL_OK      - value successfully written to config register
   *             HAL_ERROR   - I2C write error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_set_averaging_mode(
     ina260_device_t *dev, ina260_averaging_mode_t averaging_mode)
 {
@@ -518,7 +518,7 @@ ina260_status_t ina260_set_averaging_mode(
   return ina260_write_config(dev);
 }
 
-/***
+/**
   * @brief    software reset the INA260 device via configuration register,
   *           optionally resetting configuration to default or user settings.
   *           the configuration settings stored in the given ina260_device_t
@@ -530,14 +530,14 @@ ina260_status_t ina260_set_averaging_mode(
   *                  in the ina260_device_t struct (if non-zero), or use the
   *                  default configuration (if zero).
   *
-  * @retval   status of the I2C write operation with the new configuration, may
+  * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
   *             HAL_OK      - value successfully written to config register
   *             HAL_ERROR   - I2C write error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_reset(ina260_device_t *dev, uint8_t init)
 {
   if (NULL == dev)
@@ -564,7 +564,7 @@ ina260_status_t ina260_reset(ina260_device_t *dev, uint8_t init)
   }
 }
 
-/***
+/**
   * @brief    tests if a conversion is ready (following all conversions,
   *           averaging, and multiplications), to coordinate triggered
   *           measurements. once read, the flag is cleared and will not be
@@ -572,14 +572,14 @@ ina260_status_t ina260_reset(ina260_device_t *dev, uint8_t init)
   *
   * @param    dev - pointer to initialized ina260_device_t struct
   *
-  * @retval   status of the conversion ready flag as indicated in the
+  * @return   status of the conversion ready flag as indicated in the
   *           mask/enable register. may be one of the following values:
   *             HAL_OK      - conversion ready
   *             HAL_ERROR   - I2C read error or invalid arguments
   *             HAL_BUSY    - conversion not ready
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_conversion_ready(ina260_device_t *dev)
 {
   if (NULL == dev)
@@ -596,7 +596,7 @@ ina260_status_t ina260_conversion_ready(ina260_device_t *dev)
     { return HAL_OK; }
 }
 
-/***
+/**
   * @brief    reads the bus voltage (mV) stored in the INA260 voltage register
   *           for both continuous and triggered conversions
   *
@@ -605,13 +605,13 @@ ina260_status_t ina260_conversion_ready(ina260_device_t *dev)
   * @param    voltage - pointer to output float variable to which a successful
   *                     reading of bus voltage (mV) will be written
   *
-  * @retval   status of the I2C read result. may be one of the following values:
+  * @return   status of the I2C read result. may be one of the following values:
   *             HAL_OK      - success
   *             HAL_ERROR   - I2C read error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_get_voltage(ina260_device_t *dev, float *voltage)
 {
   ina260_status_t status;
@@ -630,7 +630,7 @@ ina260_status_t ina260_get_voltage(ina260_device_t *dev, float *voltage)
   return HAL_OK;
 }
 
-/***
+/**
   * @brief    reads the current (mA) stored in the INA260 current register for
   *           both continuous and triggered conversions
   *
@@ -639,13 +639,13 @@ ina260_status_t ina260_get_voltage(ina260_device_t *dev, float *voltage)
   * @param    current - pointer to output float variable to which a successful
   *                     reading of current (mA) will be written
   *
-  * @retval   status of the I2C read result. may be one of the following values:
+  * @return   status of the I2C read result. may be one of the following values:
   *             HAL_OK      - success
   *             HAL_ERROR   - I2C read error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_get_current(ina260_device_t *dev, float *current)
 {
   ina260_status_t status;
@@ -665,7 +665,7 @@ ina260_status_t ina260_get_current(ina260_device_t *dev, float *current)
   return HAL_OK;
 }
 
-/***
+/**
   * @brief    reads the power (mW) stored in the INA260 power register for both
   *           continuous and triggered conversions
   *
@@ -674,13 +674,13 @@ ina260_status_t ina260_get_current(ina260_device_t *dev, float *current)
   * @param    power - pointer to output float variable to which a successful
   *                   reading of power (mW) will be written
   *
-  * @retval   status of the I2C read result. may be one of the following values:
+  * @return   status of the I2C read result. may be one of the following values:
   *             HAL_OK      - success
   *             HAL_ERROR   - I2C read error or invalid arguments
   *             HAL_BUSY    - I2C bus busy
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
- ***/
+  */
 ina260_status_t ina260_get_power(ina260_device_t *dev, float *power)
 {
   ina260_status_t status;
