@@ -39,25 +39,32 @@ extern "C" {
 
 // ----------------------------------------------------------- exported types --
 
-typedef struct ina260_device ina260_device_t;
+typedef struct ina260 ina260_t;
 
 typedef HAL_StatusTypeDef ina260_status_t;
 
-// Determines the number of samples that are collected and averaged.
+// determines the number of samples that are collected and averaged. each sample
+// requires a given amount of ADC conversion time, and there are only a small
+// number of discrete times that may be selected (see ina260_conversion_time_t).
 typedef enum
 {
-  iamAverage1,    // = 0 (000b) -- default
-  iamAverage4,    // = 1 (001b)
-  iamAverage16,   // = 2 (010b)
-  iamAverage64,   // = 3 (011b)
-  iamAverage128,  // = 4 (100b)
-  iamAverage256,  // = 5 (101b)
-  iamAverage512,  // = 6 (110b)
-  iamAverage1024, // = 7 (111b)
+  issSample1,    // = 0 (000b) -- default
+  issSample4,    // = 1 (001b)
+  issSample16,   // = 2 (010b)
+  issSample64,   // = 3 (011b)
+  issSample128,  // = 4 (100b)
+  issSample256,  // = 5 (101b)
+  issSample512,  // = 6 (110b)
+  issSample1024, // = 7 (111b)
 }
-ina260_averaging_mode_t;
+ina260_sample_size_t;
 
-// Sets the conversion time for the voltage and current measurement.
+// sets the conversion time for the voltage and current measurement. these are
+// the only intervals recognized by the INA260 hardware (per the datasheet).
+// one complete lapse in the selected duration represents 1 sample. therefore
+// the total time required for a single measurement is calculated as selected
+// conversion time (ina260_conversion_time_t) multiplied by the selected number
+// of samples (ina260_sample_size_t).
 typedef enum
 {
   ictConvert140us,   // = 0 (000b)
@@ -71,14 +78,9 @@ typedef enum
 }
 ina260_conversion_time_t;
 
-typedef
-    ina260_conversion_time_t
-    ina260_voltage_conversion_time_t;
-
-typedef
-    ina260_conversion_time_t
-    ina260_current_conversion_time_t;
-
+// determines how measurements should be performed and updated in internal
+// data registers. you can read the contents at any time in both modes, but
+// this will affect when they update.
 typedef enum
 {
   iomTriggered,  // = 0 (000b)
@@ -86,6 +88,11 @@ typedef enum
 }
 ina260_operating_mode_t;
 
+// specifies which measurements are performed for each conversion. you can
+// perform current-only, voltage-only, or both current and voltage. note the
+// bit patterns result in the following equalities:
+//   iotShutdown == 0
+//   iotPower    == ( iotVoltage | iotCurrent )
 typedef enum
 {
   iotShutdown, // = 0 (000b)
@@ -95,22 +102,24 @@ typedef enum
 }
 ina260_operating_type_t;
 
+// format of CONFIGURATION register (00h)
 typedef union
 {
   uint16_t u16;
   __packed struct {
-    ina260_operating_type_t           type : 2; //  0 -  1
-    ina260_operating_mode_t           mode : 1; //  2
-    ina260_current_conversion_time_t ctime : 3; //  3 -  5
-    ina260_voltage_conversion_time_t vtime : 3; //  6 -  8
-    ina260_averaging_mode_t            avg : 3; //  9 - 11
-    uint8_t                           resv : 3; // 12 - 14
-    uint8_t                          reset : 1; // 15
+    ina260_operating_type_t   type : 2; //  0 -  1
+    ina260_operating_mode_t   mode : 1; //  2
+    ina260_conversion_time_t ctime : 3; //  3 -  5
+    ina260_conversion_time_t vtime : 3; //  6 -  8
+    ina260_sample_size_t     ssize : 3; //  9 - 11
+    uint8_t                   resv : 3; // 12 - 14
+    uint8_t                  reset : 1; // 15
   };
 }
 ina260_configuration_t;
 
-struct ina260_device
+// struct definition for primary device type
+struct ina260
 {
   I2C_HandleTypeDef *i2c_hal;
   uint8_t i2c_slave_addr;
@@ -122,30 +131,35 @@ struct ina260_device
 
 extern uint8_t const INA260_SLAVE_ADDRESS;
 
-extern ina260_operating_type_t          const DEFAULT_OPERATING_TYPE;
-extern ina260_operating_mode_t          const DEFAULT_OPERATING_MODE;
-extern ina260_current_conversion_time_t const DEFAULT_CURRENT_CTIME;
-extern ina260_voltage_conversion_time_t const DEFAULT_VOLTAGE_CTIME;
-extern ina260_averaging_mode_t          const DEFAULT_AVERAGING_MODE;
+extern ina260_operating_type_t  const DEFAULT_OPERATING_TYPE;
+extern ina260_operating_mode_t  const DEFAULT_OPERATING_MODE;
+extern ina260_conversion_time_t const DEFAULT_CURRENT_CTIME;
+extern ina260_conversion_time_t const DEFAULT_VOLTAGE_CTIME;
+extern ina260_sample_size_t     const DEFAULT_SAMPLE_SIZE;
 
 // ------------------------------------------------------- exported functions --
 
 /**
-  * @brief    initialize the INA260 with default configuration
+  * @brief    initialize the INA260 with default configuration (continuous
+  *           voltage and current measurements, each using 1 sample of a 1.1 ms
+  *           ADC conversion)
   *
   * @param    i2c_hal - pointer to configured HAL I2C device handle
   *
-  * @return   pointer to newly allocated ina260_device_t struct
+  * @return   pointer to newly allocated ina260_t struct
   */
-ina260_device_t *ina260_device_new(
-    I2C_HandleTypeDef *i2c_hal,
-    uint8_t i2c_slave_addr);
+ina260_t *ina260_new(I2C_HandleTypeDef *i2c_hal, uint8_t i2c_slave_addr);
 
 /**
   * @brief    check if we are communicating with the expected device over I2C
   *           correctly
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @note     this is NOT used to test if measurements are available; it only
+  *           verifies we are able to communicate with the device. use the
+  *           following routine to test if a measurement is ready for reading:
+  *             ina260_status_t ina260_conversion_ready(ina260_t *)
+  *
+  * @param    pow - pointer to initialized ina260_t struct
   *
   * @return   status of the I2C read comparison with predefined device ID, may
   *           be one of the following values:
@@ -156,15 +170,20 @@ ina260_device_t *ina260_device_new(
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
   *
   */
-ina260_status_t ina260_device_ready(ina260_device_t *dev);
+ina260_status_t ina260_ready(ina260_t *pow);
 
 /**
   * @brief    block until we are communicating with the expected device over
   *           I2C correctly
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @note     this is NOT used to test if measurements are available; it only
+  *           verifies we are able to communicate with the device. use the
+  *           following routine to test if a measurement is ready for reading:
+  *             ina260_status_t ina260_conversion_ready(ina260_t *)
   *
-  * @param    timeout - time to wait for device to become ready. to wait
+  * @param    pow - pointer to initialized ina260_t struct
+  *
+  * @param    timeout - time (ms) to wait for device to become ready. to wait
   *                     indefinitely, use value HAL_MAX_DELAY. a value of 0
   *                     will attempt communication only once.
   *
@@ -176,64 +195,62 @@ ina260_status_t ina260_device_ready(ina260_device_t *dev);
   *             HAL_TIMEOUT - I2C communication timeout or failed to obtain the
   *                           expected device ID within given timeout period.
   */
-ina260_status_t ina260_wait_until_device_ready(ina260_device_t *dev,
-    uint32_t timeout);
+ina260_status_t ina260_wait_until_ready(ina260_t *pow, uint32_t timeout);
 
 /**
   * @brief    set all configuration parameters at once
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
   * @param    operating_type - determines which conversions are performed
-  *                            for each reading. may be one of the
-  *                            following:
-  *             @arg @ref  iotShutdown - put device in power-down state
-  *             @arg @ref  iotCurrent  - perform current readings only
-  *             @arg @ref  iotVoltage  - perform voltage readings only
-  *             @arg @ref  iotPower    - perform current and voltage readings
+  *                            for each reading. may be one of the following:
+  *             iotShutdown - put device in power-down state
+  *             iotCurrent  - perform current readings only
+  *             iotVoltage  - perform voltage readings only
+  *             iotPower    - perform current and voltage readings
   *
   * @param    operating_mode - determines how conversions should be performed
   *                            for reading. may be one of the following:
-  *             @arg @ref  iomTriggered  - perform one-shot reading
-  *             @arg @ref  iomContinuous - continuously update readings
+  *             iomTriggered  - perform one-shot reading
+  *             iomContinuous - continuously update readings
   *
   * @param    current_ctime - sets the conversion time for the current
   *                           measurement. total measure time is conversion
   *                           time multiplied by number of samples (specified
-  *                           by averaging_mode). may be one of the following:
-  *             @arg @ref  ictConvert140us   - 140 us
-  *             @arg @ref  ictConvert204us   - 204 us
-  *             @arg @ref  ictConvert332us   - 332 us
-  *             @arg @ref  ictConvert588us   - 588 us
-  *             @arg @ref  ictConvert1p1ms   - 1.1 ms
-  *             @arg @ref  ictConvert2p116ms - 2.116 ms
-  *             @arg @ref  ictConvert4p156ms - 4.156 ms
-  *             @arg @ref  ictConvert8p244ms - 8.244 ms
+  *                           by sample_size). may be one of the following:
+  *             ictConvert140us   - 140 us
+  *             ictConvert204us   - 204 us
+  *             ictConvert332us   - 332 us
+  *             ictConvert588us   - 588 us
+  *             ictConvert1p1ms   - 1.1 ms
+  *             ictConvert2p116ms - 2.116 ms
+  *             ictConvert4p156ms - 4.156 ms
+  *             ictConvert8p244ms - 8.244 ms
   *
   * @param    voltage_ctime - sets the conversion time for the bus voltage
   *                           measurement. total measure time is conversion
   *                           time multiplied by number of samples (specified
-  *                           by averaging_mode). may be one of the following:
-  *             @arg @ref  ictConvert140us   - 140 us
-  *             @arg @ref  ictConvert204us   - 204 us
-  *             @arg @ref  ictConvert332us   - 332 us
-  *             @arg @ref  ictConvert588us   - 588 us
-  *             @arg @ref  ictConvert1p1ms   - 1.1 ms
-  *             @arg @ref  ictConvert2p116ms - 2.116 ms
-  *             @arg @ref  ictConvert4p156ms - 4.156 ms
-  *             @arg @ref  ictConvert8p244ms - 8.244 ms
+  *                           by sample_size). may be one of the following:
+  *             ictConvert140us   - 140 us
+  *             ictConvert204us   - 204 us
+  *             ictConvert332us   - 332 us
+  *             ictConvert588us   - 588 us
+  *             ictConvert1p1ms   - 1.1 ms
+  *             ictConvert2p116ms - 2.116 ms
+  *             ictConvert4p156ms - 4.156 ms
+  *             ictConvert8p244ms - 8.244 ms
   *
-  * @param    averaging_mode - determines the number of samples that are
-  *                            collected and averaged for each measurement.
-  *                            may be one of the following:
-  *             @arg @ref  iamAverage1    - 1 sample
-  *             @arg @ref  iamAverage4    - 4 samples
-  *             @arg @ref  iamAverage16   - 16 samples
-  *             @arg @ref  iamAverage64   - 64 samples
-  *             @arg @ref  iamAverage128  - 128 samples
-  *             @arg @ref  iamAverage256  - 256 samples
-  *             @arg @ref  iamAverage512  - 512 samples
-  *             @arg @ref  iamAverage1024 - 1024 samples
+  * @param    sample_size - determines the number of samples that are collected
+                            and averaged for each measurement. may be one of the
+                            following:
+  *             issSample1    - 1 sample
+  *             issSample4    - 4 samples
+  *             issSample16   - 16 samples
+  *             issSample64   - 64 samples
+  *             issSample128  - 128 samples
+  *             issSample256  - 256 samples
+  *             issSample512  - 512 samples
+  *             issSample1024 - 1024 samples
   *
   * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
@@ -243,26 +260,24 @@ ina260_status_t ina260_wait_until_device_ready(ina260_device_t *dev,
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_set_config(
-    ina260_device_t                  *dev,
-    ina260_operating_type_t           operating_type,
-    ina260_operating_mode_t           operating_mode,
-    ina260_current_conversion_time_t  current_ctime,
-    ina260_voltage_conversion_time_t  voltage_ctime,
-    ina260_averaging_mode_t           averaging_mode);
+ina260_status_t ina260_set_config(ina260_t *pow,
+    ina260_operating_type_t  operating_type,
+    ina260_operating_mode_t  operating_mode,
+    ina260_conversion_time_t current_ctime,
+    ina260_conversion_time_t voltage_ctime,
+    ina260_sample_size_t     sample_size);
 
 /**
   * @brief    set the operating type
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
-  * @param    operating_type - determines which conversions are performed
-  *                            for each reading. may be one of the
-  *                            following:
-  *             @arg @ref  iotShutdown - put device in power-down state
-  *             @arg @ref  iotCurrent  - perform current readings only
-  *             @arg @ref  iotVoltage  - perform voltage readings only
-  *             @arg @ref  iotPower    - perform current and voltage readings
+  * @param    operating_type - determines which conversions are performed for
+  *                            each reading. may be one of the following:
+  *             iotShutdown - put device in power-down state
+  *             iotCurrent  - perform current readings only
+  *             iotVoltage  - perform voltage readings only
+  *             iotPower    - perform current and voltage readings
   *
   * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
@@ -272,18 +287,18 @@ ina260_status_t ina260_set_config(
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_set_operating_type(
-    ina260_device_t *dev, ina260_operating_type_t operating_type);
+ina260_status_t ina260_set_operating_type(ina260_t *pow,
+    ina260_operating_type_t operating_type);
 
 /**
-  * @brief    set the operating mode, or start triggered conversions.
+  * @brief    set the operating mode
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
   * @param    operating_mode - determines how conversions should be performed
   *                            for reading. may be one of the following:
-  *             @arg @ref  iomTriggered  - perform one-shot reading
-  *             @arg @ref  iomContinuous - continuously update readings
+  *             iomTriggered  - perform one-shot reading
+  *             iomContinuous - continuously update readings
   *
   * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
@@ -293,26 +308,26 @@ ina260_status_t ina260_set_operating_type(
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_set_operating_mode(
-    ina260_device_t *dev, ina260_operating_mode_t operating_mode);
+ina260_status_t ina260_set_operating_mode(ina260_t *pow,
+    ina260_operating_mode_t operating_mode);
 
 /**
   * @brief    set the conversion time for both voltage and current readings
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
-  * @param    ctime - sets the conversion time for both voltage and current
-  *                   measurements. total measure time is conversion time
-  *                   multiplied by number of samples. may be one of the
-  *                   following:
-  *             @arg @ref  ictConvert140us   - 140 us
-  *             @arg @ref  ictConvert204us   - 204 us
-  *             @arg @ref  ictConvert332us   - 332 us
-  *             @arg @ref  ictConvert588us   - 588 us
-  *             @arg @ref  ictConvert1p1ms   - 1.1 ms
-  *             @arg @ref  ictConvert2p116ms - 2.116 ms
-  *             @arg @ref  ictConvert4p156ms - 4.156 ms
-  *             @arg @ref  ictConvert8p244ms - 8.244 ms
+  * @param    time - sets the conversion time for both voltage and current
+  *                  measurements. total measure time is conversion time
+  *                  multiplied by number of samples. may be one of the
+  *                  following:
+  *             ictConvert140us   - 140 us
+  *             ictConvert204us   - 204 us
+  *             ictConvert332us   - 332 us
+  *             ictConvert588us   - 588 us
+  *             ictConvert1p1ms   - 1.1 ms
+  *             ictConvert2p116ms - 2.116 ms
+  *             ictConvert4p156ms - 4.156 ms
+  *             ictConvert8p244ms - 8.244 ms
   *
   * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
@@ -322,26 +337,25 @@ ina260_status_t ina260_set_operating_mode(
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_set_conversion_time(
-    ina260_device_t *dev, ina260_conversion_time_t ctime);
+ina260_status_t ina260_set_conversion_time(ina260_t *pow,
+    ina260_conversion_time_t time);
 
 /**
   * @brief    set the conversion time for current readings
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
-  * @param    current_ctime - sets the conversion time for the current
-  *                           measurement. total measure time is conversion
-  *                           time multiplied by number of samples. may be
-  *                           one of the following:
-  *             @arg @ref  ictConvert140us   - 140 us
-  *             @arg @ref  ictConvert204us   - 204 us
-  *             @arg @ref  ictConvert332us   - 332 us
-  *             @arg @ref  ictConvert588us   - 588 us
-  *             @arg @ref  ictConvert1p1ms   - 1.1 ms
-  *             @arg @ref  ictConvert2p116ms - 2.116 ms
-  *             @arg @ref  ictConvert4p156ms - 4.156 ms
-  *             @arg @ref  ictConvert8p244ms - 8.244 ms
+  * @param    time - sets the conversion time for the current measurement. total
+  *                  measure time is conversion time multiplied by number of
+  *                  samples. may be one of the following:
+  *             ictConvert140us   - 140 us
+  *             ictConvert204us   - 204 us
+  *             ictConvert332us   - 332 us
+  *             ictConvert588us   - 588 us
+  *             ictConvert1p1ms   - 1.1 ms
+  *             ictConvert2p116ms - 2.116 ms
+  *             ictConvert4p156ms - 4.156 ms
+  *             ictConvert8p244ms - 8.244 ms
   *
   * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
@@ -351,26 +365,25 @@ ina260_status_t ina260_set_conversion_time(
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_set_current_conversion_time(
-    ina260_device_t *dev, ina260_current_conversion_time_t current_ctime);
+ina260_status_t ina260_set_current_conversion_time(ina260_t *pow,
+    ina260_conversion_time_t time);
 
 /**
   * @brief    set the conversion time for voltage readings
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
-  * @param    voltage_ctime - sets the conversion time for the bus voltage
-  *                           measurement. total measure time is conversion
-  *                           time multiplied by number of samples. may be
-  *                           one of the following:
-  *             @arg @ref  ictConvert140us   - 140 us
-  *             @arg @ref  ictConvert204us   - 204 us
-  *             @arg @ref  ictConvert332us   - 332 us
-  *             @arg @ref  ictConvert588us   - 588 us
-  *             @arg @ref  ictConvert1p1ms   - 1.1 ms
-  *             @arg @ref  ictConvert2p116ms - 2.116 ms
-  *             @arg @ref  ictConvert4p156ms - 4.156 ms
-  *             @arg @ref  ictConvert8p244ms - 8.244 ms
+  * @param    time - sets the conversion time for the bus voltage measurement.
+  *                  total measure time is conversion time multiplied by number
+  *                  of samples. may be one of the following:
+  *             ictConvert140us   - 140 us
+  *             ictConvert204us   - 204 us
+  *             ictConvert332us   - 332 us
+  *             ictConvert588us   - 588 us
+  *             ictConvert1p1ms   - 1.1 ms
+  *             ictConvert2p116ms - 2.116 ms
+  *             ictConvert4p156ms - 4.156 ms
+  *             ictConvert8p244ms - 8.244 ms
   *
   * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
@@ -380,25 +393,26 @@ ina260_status_t ina260_set_current_conversion_time(
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_set_voltage_conversion_time(
-    ina260_device_t *dev, ina260_voltage_conversion_time_t voltage_ctime);
+ina260_status_t ina260_set_voltage_conversion_time(ina260_t *pow,
+    ina260_conversion_time_t time);
 
 /**
-  * @brief    set the averaging mode for voltage and current readings
+  * @brief    set the sample size (averaging mode) for voltage and current
+  *           readings
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
-  * @param    averaging_mode - determines the number of samples that are
-  *                            collected and averaged for each measurement.
-  *                            may be one of the following:
-  *             @arg @ref  iamAverage1    - 1 sample
-  *             @arg @ref  iamAverage4    - 4 samples
-  *             @arg @ref  iamAverage16   - 16 samples
-  *             @arg @ref  iamAverage64   - 64 samples
-  *             @arg @ref  iamAverage128  - 128 samples
-  *             @arg @ref  iamAverage256  - 256 samples
-  *             @arg @ref  iamAverage512  - 512 samples
-  *             @arg @ref  iamAverage1024 - 1024 samples
+  * @param    sample_size - determines the number of samples that are collected
+  *                         and averaged for each measurement. may be one of the
+  *                         following:
+  *             issSample1    - 1 sample
+  *             issSample4    - 4 samples
+  *             issSample16   - 16 samples
+  *             issSample64   - 64 samples
+  *             issSample128  - 128 samples
+  *             issSample256  - 256 samples
+  *             issSample512  - 512 samples
+  *             issSample1024 - 1024 samples
   *
   * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
@@ -408,20 +422,21 @@ ina260_status_t ina260_set_voltage_conversion_time(
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_set_averaging_mode(
-    ina260_device_t *dev, ina260_averaging_mode_t averaging_mode);
+ina260_status_t ina260_set_sample_size(ina260_t *pow,
+    ina260_sample_size_t sample_size);
 
 /**
   * @brief    software reset the INA260 device via configuration register,
   *           optionally resetting configuration to default or user settings.
-  *           the configuration settings stored in the given ina260_device_t
-  *           struct will reflect the actual resulting device configuration.
+  *           the configuration settings stored in the given ina260_t struct
+  *           will reflect the actual resulting device configuration in either
+  *           case.
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
   * @param    init - initialize configuration using the current settings stored
-  *                  in the ina260_device_t struct (if non-zero), or use the
-  *                  default configuration (if zero).
+  *                  in the ina260_t struct (if non-zero), or use the default
+  *                  configuration (if zero).
   *
   * @return   status of the I2C write operation with the new configuration, may
   *           be one of the following values:
@@ -431,15 +446,15 @@ ina260_status_t ina260_set_averaging_mode(
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_reset(ina260_device_t *dev, uint8_t init);
+ina260_status_t ina260_reset(ina260_t *pow, uint8_t init);
 
 /**
   * @brief    tests if a conversion is ready (following all conversions,
   *           averaging, and multiplications), to coordinate triggered
-  *           measurements. once read, the flag is cleared and will not be
-  *           true again until the next conversion completes.
+  *           measurements. once read, the flag is cleared and will not be set
+  *           again until the next conversion completes.
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
   * @return   status of the conversion ready flag as indicated in the
   *           mask/enable register. may be one of the following values:
@@ -449,13 +464,31 @@ ina260_status_t ina260_reset(ina260_device_t *dev, uint8_t init);
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_conversion_ready(ina260_device_t *dev);
+ina260_status_t ina260_conversion_ready(ina260_t *pow);
+
+/**
+  * @brief    starts or restarts a triggered "one-shot" conversion using the
+  *           current device configuration. if the current operating mode is
+  *           continuous, this routine does nothing and will not affect the
+  *           device in any way.
+  *
+  * @param    pow - pointer to initialized ina260_t struct
+  *
+  * @return   status of the I2C write operation with the new configuration, may
+  *           be one of the following values:
+  *             HAL_OK      - value successfully written to config register
+  *             HAL_ERROR   - I2C write error or invalid arguments
+  *             HAL_BUSY    - I2C bus busy or operating mode is continuous
+  *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
+  *                           INA260_I2C_WRITE_TIMEOUT_MS in ina260.c
+  */
+ina260_status_t ina260_conversion_start(ina260_t *pow);
 
 /**
   * @brief    reads the bus voltage (mV) stored in the INA260 voltage register
   *           for both continuous and triggered conversions
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
   * @param    voltage - pointer to output float variable to which a successful
   *                     reading of bus voltage (mV) will be written
@@ -467,13 +500,13 @@ ina260_status_t ina260_conversion_ready(ina260_device_t *dev);
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_get_voltage(ina260_device_t *dev, float *voltage);
+ina260_status_t ina260_get_voltage(ina260_t *pow, float *voltage);
 
 /**
   * @brief    reads the current (mA) stored in the INA260 current register for
   *           both continuous and triggered conversions
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
   * @param    current - pointer to output float variable to which a successful
   *                     reading of current (mA) will be written
@@ -485,13 +518,13 @@ ina260_status_t ina260_get_voltage(ina260_device_t *dev, float *voltage);
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_get_current(ina260_device_t *dev, float *current);
+ina260_status_t ina260_get_current(ina260_t *pow, float *current);
 
 /**
   * @brief    reads the power (mW) stored in the INA260 power register for both
   *           continuous and triggered conversions
   *
-  * @param    dev - pointer to initialized ina260_device_t struct
+  * @param    pow - pointer to initialized ina260_t struct
   *
   * @param    power - pointer to output float variable to which a successful
   *                   reading of power (mW) will be written
@@ -503,7 +536,7 @@ ina260_status_t ina260_get_current(ina260_device_t *dev, float *current);
   *             HAL_TIMEOUT - I2C communication timeout. see timeout constant
   *                           INA260_I2C_READ_TIMEOUT_MS in ina260.c
   */
-ina260_status_t ina260_get_power(ina260_device_t *dev, float *power);
+ina260_status_t ina260_get_power(ina260_t *pow, float *power);
 
 #ifdef __cplusplus
 }
