@@ -1,3 +1,11 @@
+#### Freeze
+
+This library is frozen. I'll still accept PRs for bug fixes, security issues (hah), and so on.
+
+See [ardnew/libpvc](https://github.com/ardnew/libpvc) for an alternative, platform-agnostic library with much thinner API — including an Arduino-compatible adapter and example project for PlatformIO.
+
+---
+
 # INA260-STM32-HAL
 ##### INA260 voltage/current sensor driver for STM32 using HAL I²C
 
